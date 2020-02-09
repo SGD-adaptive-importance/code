@@ -2,15 +2,21 @@ import numpy as np
 import random
 
 ###################
+#number of trials
 numTrials = 10
+#number of SGD steps
 epochs = 40
+#number of features in data
+numFeatures = 3072
 numBatches = epochs*epochs
-x=[]
-for i in range(3072):
-    x.append(random.uniform(0,10))
-y = x
+#step-size
 stepSize = 1*10**-13
 ###################
+
+x=[]
+for i in range(numFeatures):
+    x.append(random.uniform(0,10))
+y = x
 
 def unpickle(file):
     import pickle
@@ -18,6 +24,7 @@ def unpickle(file):
         batch = pickle.load(fo, encoding='latin1')
     return batch
 
+#Collect training data
 info = unpickle("data_batch_1")
 A = list(info['data'])
 b = list(info['labels'])
@@ -25,6 +32,7 @@ b = list(info['labels'])
 matA = np.array(A)
 vecb = np.array(b)
 
+#Collect test data
 test_info = unpickle("test_batch")
 test_A = list(info['data'])
 test_b = list(info['labels'])
@@ -47,6 +55,8 @@ for i in range(numBatches):
     ABatches.append(newAMatrix)
     bBatches.append(newbMatrix)
 
+#function that samples a gradient with probability distribution roughly that of importance sampling
+#linear regression
 def sampleScaledGradient(M, v, diff):
     #M is n by d, v is 1 by d, diff is 1 by n
     #Corresponds to A, x^T, and b
@@ -79,6 +89,7 @@ def sampleScaledGradient(M, v, diff):
     #outGradient is a column vector
     return outGradient
 
+#update position with gradient and step-size
 def update(pos,grad,step):
     npcolgrad = grad * step
     #npcolgrad is a column vector
@@ -88,6 +99,7 @@ def update(pos,grad,step):
         newPos.append(pos[i]-diff[i])
     return newPos
 
+#standard SGD with uniform sampling
 def SGD(M, v, diff):
     i = random.randint(0,len(M)-1)
     colV = (np.array([v])).T
@@ -99,10 +111,11 @@ def SGD(M, v, diff):
     return outGradient
 
 allScores = []
+#collect objective values on test data
 for j in range(numTrials):
     trialData = []
     x=[]
-    for i in range(3072):
+    for i in range(numFeatures):
         x.append(random.uniform(0,10))
     y = x
     for i in range(epochs):
@@ -118,6 +131,7 @@ for j in range(numTrials):
 summaryXScores = []
 summaryYScores = []
 
+#formatting for plots
 for j in range(epochs):
     scoreX = 0
     scoreY = 0
