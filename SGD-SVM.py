@@ -1,9 +1,10 @@
 import numpy as np
 import random
+import time
 
 ###################
-trainingFile = open("training.txt","r")
-testFile = open("test.txt","r")
+trainingFile = open("a9a_SVM.txt","r")
+testFile = open("a9a_SVM_test.txt","r")
 data = trainingFile.readlines()
 testData = testFile.readlines()
 Xmat = []
@@ -15,11 +16,12 @@ testyvec = []
 #number of features in data
 numFeatures = 123
 #number of trials
-numTrials = 5
+numTrials = 100
 
 #number of SGD steps
-epochs = 21
-numBatches = epochs*epochs
+epochs = 76
+#numBatches = epochs*epochs
+numBatches = 15*epochs
 #step-size
 stepSize = 1
 regularizer = 0
@@ -44,7 +46,7 @@ y = np.array(yvec)
 
 #Collect test data
 for i in range(numTestData):
-    words = data[i].split()
+    words = testData[i].split()
     testyvec.append(int(words[0]))
     newRow = []
     numWords = len(words)-2
@@ -90,9 +92,9 @@ def sampleScaledGradient(M, v, diff):
         if diff[rowNum]*rowv[0][0] >= 1:
             norm = 0
         else:
-            #-y_i*x_i^T
+            #next step computes -y_i*x_i^T
             firstTerm = -1*diff[rowNum]*(np.array([row])).T/numRows
-            #lambda*w
+            #next step computes lambda*w
             secondTerm = regularizer*colV
             gradient = firstTerm+secondTerm
             norm = np.linalg.norm(gradient)
@@ -116,9 +118,9 @@ def SGD(M, v, diff):
     if diff[i]*rowv[0][0] >= 1:
         outGradient = colV*0
     else:
-        #-y_i*x_i^T
+        #next step computes -y_i*x_i^T
         firstTerm = -1*diff[i]*(np.array([row])).T/numRows
-        #lambda*w
+        #next step computes lambda*w
         secondTerm = regularizer*colV
         outGradient = firstTerm+secondTerm
     return outGradient
@@ -149,6 +151,16 @@ def score(M,pos,diff):
 
 wOneScores = [0]*epochs
 wTwoScores = [0]*epochs
+wThreeScores = [0]*epochs
+wFourScores = [0]*epochs
+
+wOneTimes = [0]*epochs
+wTwoTimes = [0]*epochs
+wThreeTimes = [0]*epochs
+wFourTimes = [0]*epochs
+
+
+computeTime = 0
 
 #collect objective values on test data
 for j in range(numTrials):
@@ -156,21 +168,102 @@ for j in range(numTrials):
     for i in range(numFeatures):
         wOne.append(random.uniform(0,10))
     wTwo = wOne
+    wThree = wOne
+    wFour = wOne
+    timeOne = 0
+    timeTwo = 0
+    timeThree = 0
+    timeFour = 0
+    computeStart = time.time()
     for i in range(epochs):
-        gradIS = sampleScaledGradient(XBatches[i],wOne,yBatches[i])
-        gradSGD = SGD(XBatches[i],wTwo,yBatches[i])
-        scoreWone = score(testXmat, wOne, testyvec)
-        scoreWtwo = score(testXmat, wTwo, testyvec)
-        #scoreY = np.linalg.norm(np.matmul(matA,y)-vecb)
+        #Uncomment to track scores
+        #scoreWone = score(testXmat, wOne, testyvec)
+        #scoreWtwo = score(testXmat, wTwo, testyvec)
+        #scoreWthree = score(testXmat, wThree, testyvec)
+        #scoreWfour = score(testXmat, wFour, testyvec)
+        #wOneScores[i]=wOneScores[i]+scoreWone/numTrials
+        #wTwoScores[i]=wTwoScores[i]+scoreWtwo/numTrials
+        #wThreeScores[i]=wThreeScores[i]+scoreWthree/numTrials
+        #wFourScores[i]=wFourScores[i]+scoreWfour/numTrials
+
+        #Uncomment to track times
+        wOneTimes[i]=wOneTimes[i]+timeOne/numTrials
+        wTwoTimes[i]=wTwoTimes[i]+timeTwo/numTrials
+        wThreeTimes[i]=wThreeTimes[i]+timeThree/numTrials
+        wFourTimes[i]=wFourTimes[i]+timeFour/numTrials
+
+        Xin = XBatches[i]
+        Yin = yBatches[i]
+
+        gradMixed = 0
+        start = time.time()
+        gradIS = sampleScaledGradient(Xin,wOne,Yin)
         wOne = update(wOne, gradIS, stepSize)
+        stop = time.time()
+        timeOne = timeOne + (stop - start)
+
+        start = time.time()
+        gradSGD = SGD(Xin,wTwo,Yin)
         wTwo = update(wTwo, gradSGD, stepSize)
-        #y = update(y, gradSGD, stepSize)
-        wOneScores[i]=wOneScores[i]+scoreWone/numTrials
-        wTwoScores[i]=wTwoScores[i]+scoreWtwo/numTrials
+        stop = time.time()
+        timeTwo = timeTwo + (stop - start)
+
+        start = time.time()
+        gradMixedIS = sampleScaledGradient(Xin,wThree,Yin)
+        gradMixedSGD = SGD(Xin,wThree,Yin)
+        wThreeIS = update(wThree, gradMixedIS, stepSize)
+        wThreeSGD = update(wThree, gradMixedSGD, stepSize)
+        #Take the better of the two gradients for scoreThree
+        scoreWthreeIS = score(Xin, wThreeIS, Yin)
+        scoreWthreeSGD = score(Xin, wThreeSGD, Yin)
+        if scoreWthreeIS < scoreWthreeSGD:
+            wThree = wThreeIS
+        else:
+            wThree = wThreeSGD
+        stop = time.time()
+        timeThree = timeThree + (stop - start)
+
+        start = time.time()
+        if i < 25:
+            gradFlip = sampleScaledGradient(Xin,wFour,Yin)
+        else:
+            gradFlip = SGD(Xin,wFour,Yin)
+        wFour = update(wFour, gradFlip, stepSize)
+        stop = time.time()
+        timeFour = timeFour + (stop - start)
+    computeEnd = time.time()
+    computeTime = computeEnd-computeStart
 
 #formatting for plots
+#importance sampling
 for i in range(epochs):
-    print((i,int(wOneScores[i])))
+    if i%5 == 0:
+        #uncomment to print scores
+        #print((i,int(wOneScores[i])))
+        #uncomment to print times
+        print((i,round(wOneTimes[i],4)))
+#SGD
+for i in range(epochs):
+    if i%5 == 0:
+        #uncomment to print scores
+        #print((i,int(wTwoScores[i])))
+        #uncomment to print times
+        print((i,round(wTwoTimes[i],4)))
 
+#Mixed
 for i in range(epochs):
-    print((i,int(wTwoScores[i])))
+    if i%5 == 0:
+        #uncomment to print scores
+        #print((i,int(wThreeScores[i])))
+        #uncomment to print times
+        print((i,round(wThreeTimes[i],4)))
+
+#Flip
+for i in range(epochs):
+    if i%5 == 0:
+        #uncomment to print scores
+        #print((i,int(wFourScores[i])))
+        #uncomment to print times
+        print((i,round(wFourTimes[i],4)))
+
+print(computeTime)
